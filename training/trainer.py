@@ -116,7 +116,7 @@ class Trainer(TrainerAbstract, TrainerLoss, TrainerIteration, TrainerDataset, Tr
         self.flags.train = False
         self.network.eval()
 
-        root = 'reconstructed'
+        root = self.opt.generation_root
         if not os.path.exists(root):
             os.mkdir(root)
 

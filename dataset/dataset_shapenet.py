@@ -38,7 +38,11 @@ class ShapeNet(data.Dataset):
 
             # Load classes
             self.pointcloud_path = join(dirname(__file__), 'data/ShapeNetV1PointCloud')
-            self.image_path = join(dirname(__file__), 'data/ShapeNetV1Renderings')
+
+            if opt.depth_renderings:
+                self.image_path = join(dirname(__file__), 'data/ShapeNetDepthRenderings')
+            else:
+                self.image_path = join(dirname(__file__), 'data/ShapeNetV1Renderings')
 
             # Load taxonomy file
             self.taxonomy_path = join(dirname(__file__), 'data/taxonomy.json')
@@ -105,7 +109,10 @@ class ShapeNet(data.Dataset):
                     self.category_datapath[category] = []
                     for pointcloud in list_pointcloud:
                         pointcloud_path = join(dir_pointcloud, pointcloud)
-                        image_path = join(dir_image, pointcloud.split(".")[0], "rendering")
+                        if opt.depth_renderings:
+                            image_path = join(dir_image, pointcloud.split(".")[0], "rendering_png")
+                        else:
+                            image_path = join(dir_image, pointcloud.split(".")[0], "rendering")
                         if not self.opt.SVR or exists(image_path):
                             self.category_datapath[category].append((pointcloud_path, image_path, pointcloud, category))
                         else:
@@ -121,28 +128,45 @@ class ShapeNet(data.Dataset):
 
 
     def preprocess(self):
-        if exists(self.path_dataset + "info.pkl"):
+        # info list
+        if not self.opt.depth_renderings and exists(self.path_dataset + "info.pkl"):
             # Reload dataset
-            my_utils.red_print(f"Reload dataset : {self.path_dataset}")
+            my_utils.red_print(f"Reload dataset info: {self.path_dataset}")
             with open(self.path_dataset + "info.pkl", "rb") as fp:
                 self.data_metadata = pickle.load(fp)
+        elif self.opt.depth_renderings and exists(self.path_dataset + "_depth_info.pkl"):
+            my_utils.red_print(f"Reload dataset info: {self.path_dataset}")
+            with open(self.path_dataset + "_depth_info.pkl", "rb") as fp:
+                self.data_metadata = pickle.load(fp)
+        else:
+            my_utils.red_print("preprocess info dataset...")
 
+            self.datas = [self.datapath[i] for i in range(self.__len__())]
+            self.data_metadata = [{'pointcloud_path': a[0], 'image_path': a[1], 'name': a[2], 'category': a[3]} for a in
+                                  self.datas]
+
+            # Save in cache
+            if self.opt.depth_renderings:
+                end_name = "_depth_info.pkl"
+            else:
+                end_name = "info.pkl"
+
+            with open(self.path_dataset + end_name, "wb") as fp:  # Pickling
+                pickle.dump(self.data_metadata, fp)
+
+        # points
+        if exists(self.path_dataset + "points.pth"):
+            my_utils.red_print(f"Reload dataset points: {self.path_dataset}")
             self.data_points = torch.load(self.path_dataset + "points.pth")
         else:
             # Preprocess dataset and put in cache for future fast reload
-            my_utils.red_print("preprocess dataset...")
+            my_utils.red_print("preprocess points dataset...")
             self.datas = [self._getitem(i) for i in range(self.__len__())]
 
             # Concatenate all proccessed files
             self.data_points = [a[0] for a in self.datas]
             self.data_points = torch.cat(self.data_points, 0)
 
-            self.data_metadata = [{'pointcloud_path': a[1], 'image_path': a[2], 'name': a[3], 'category': a[4]} for a in
-                                  self.datas]
-
-            # Save in cache
-            with open(self.path_dataset + "info.pkl", "wb") as fp:  # Pickling
-                pickle.dump(self.data_metadata, fp)
             torch.save(self.data_points, self.path_dataset + "points.pth")
 
         my_utils.red_print("Dataset Size: " + str(len(self.data_metadata)))
@@ -166,14 +190,27 @@ class ShapeNet(data.Dataset):
         ])
 
         # RandomResizedCrop or RandomCrop
-        self.dataAugmentation = transforms.Compose([
-            transforms.RandomCrop(127),
-            transforms.RandomHorizontalFlip(),
-        ])
+        if self.opt.depth_renderings:
+            self.dataAugmentation = transforms.Compose([
+                transforms.Resize(size=137),
+                transforms.RandomCrop(127),
+                transforms.RandomHorizontalFlip(),
+            ])
+        else:
+            self.dataAugmentation = transforms.Compose([
+                transforms.RandomCrop(127),
+                transforms.RandomHorizontalFlip(),
+            ])
 
-        self.validating = transforms.Compose([
-            transforms.CenterCrop(127),
-        ])
+        if self.opt.depth_renderings:
+            self.validating = transforms.Compose([
+                transforms.Resize(size=137),
+                transforms.CenterCrop(127),
+            ])
+        else:
+            self.validating = transforms.Compose([
+                transforms.CenterCrop(127),
+            ])
 
     def _getitem(self, index):
         pointcloud_path, image_path, pointcloud, category = self.datapath[index]
@@ -197,10 +234,16 @@ class ShapeNet(data.Dataset):
         if self.opt.SVR:
             if self.train:
                 N = np.random.randint(1, self.num_image_per_object)
-                im = Image.open(join(return_dict['image_path'], ShapeNet.int2str(N) + ".png"))
+                if self.opt.depth_renderings:
+                    im = Image.open(join(return_dict['image_path'], ShapeNet.int2str(N) + "_rgba.png"))
+                else:
+                    im = Image.open(join(return_dict['image_path'], ShapeNet.int2str(N) + ".png"))
                 im = self.dataAugmentation(im)  # random crop
             else:
-                im = Image.open(join(return_dict['image_path'], ShapeNet.int2str(self.idx_image_val) + ".png"))
+                if self.opt.depth_renderings:
+                    im = Image.open(join(return_dict['image_path'], ShapeNet.int2str(self.idx_image_val) + "_rgba.png"))
+                else:
+                    im = Image.open(join(return_dict['image_path'], ShapeNet.int2str(self.idx_image_val) + ".png"))
                 im = self.validating(im)  # center crop
             im = self.transforms(im)  # scale
             im = im[:3, :, :]

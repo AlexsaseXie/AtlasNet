@@ -130,7 +130,7 @@ class Trainer(TrainerAbstract, TrainerLoss, TrainerIteration, TrainerDataset, Tr
             mesh = self.network.module.generate_mesh(self.data.network_input)
 
             category_id = self.data.category[0]
-            model_id = self.data.name[0]
+            model_id = self.data.name[0].split('.')[0]
 
             points = self.data.points.float()
             # transfer back to model size

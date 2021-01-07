@@ -11,6 +11,9 @@ author : Thibault Groueix 01.11.2019
 """
 
 opt = argument_parser.parser()
+if opt.run_single_generation:
+    opt.batch_size_test = 1
+
 torch.cuda.set_device(opt.multi_gpu[0])
 my_utils.plant_seeds(random_seed=opt.random_seed)
 import training.trainer as trainer

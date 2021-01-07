@@ -13,6 +13,7 @@ from dataset.trainer_dataset import TrainerDataset
 from training.trainer_loss import TrainerLoss
 
 import dataset.pointcloud_processor as pointcloud_processor
+from tqdm import tqdm
 
 class Trainer(TrainerAbstract, TrainerLoss, TrainerIteration, TrainerDataset, TrainerModel):
     def __init__(self, opt):
@@ -122,16 +123,16 @@ class Trainer(TrainerAbstract, TrainerLoss, TrainerIteration, TrainerDataset, Tr
 
         iterator = self.datasets.dataloader_test.__iter__()
         self.reset_iteration()
-        for data in iterator:
+        for data in tqdm(iterator):
             self.increment_iteration()
             self.data = EasyDict(data)
             self.make_network_input()
             mesh = self.network.module.generate_mesh(self.data.network_input)
 
-            category_id = self.data.category
-            model_id = self.data.name
+            category_id = self.data.category[0]
+            model_id = self.data.name[0]
 
-            points = self.data.points
+            points = self.data.points.float()
             # transfer back to model size
             operation = pointcloud_processor.Normalization(points, keep_track=True)
             if self.opt.normalization == "UnitBall":
@@ -142,7 +143,7 @@ class Trainer(TrainerAbstract, TrainerLoss, TrainerIteration, TrainerDataset, Tr
                 pass
 
             # Undo any normalization that was used to preprocess the input.
-            vertices = torch.from_numpy(mesh.vertices).clone().unsqueeze(0)
+            vertices = torch.from_numpy(mesh.vertices).float().clone().unsqueeze(0)
             operation.invert()
             unnormalized_vertices = operation.apply(vertices)
             mesh = pymesh.form_mesh(vertices=unnormalized_vertices.squeeze().numpy(), faces=mesh.faces)

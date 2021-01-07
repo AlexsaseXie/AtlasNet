@@ -179,7 +179,8 @@ class ShapeNet(data.Dataset):
         pointcloud_path, image_path, pointcloud, category = self.datapath[index]
         points = np.load(pointcloud_path)
         points = torch.from_numpy(points).float()
-        points[:, :3] = self.normalization_function(points[:, :3])
+        if not self.opt.run_single_generation:
+            points[:, :3] = self.normalization_function(points[:, :3])
         return points.unsqueeze(0), pointcloud_path, image_path, pointcloud, category
 
     def __getitem__(self, index):

@@ -29,6 +29,7 @@ def parser():
     parser.add_argument('--lr_decay_2', type=int, default=140, help='learning rate decay 2')
     parser.add_argument('--lr_decay_3', type=int, default=145, help='learning rate decay 2')
     parser.add_argument("--run_single_eval", action="store_true", help="evaluate a trained network")
+    parser.add_argument("--run_single_generation", action='store_true', help="generation mesh for test set")
     parser.add_argument("--demo", action="store_true", help="run demo autoencoder or single-view")
 
     # Data

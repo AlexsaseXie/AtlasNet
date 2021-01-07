@@ -32,6 +32,12 @@ if opt.run_single_eval:
         trainer.test_epoch()
     sys.exit(0)
 
+if opt.run_single_generation:
+    assert opt.batch_size_test == 1
+    with torch.no_grad():
+        trainer.test_generation_epoch()
+    sys.exit(0)
+
 for epoch in range(trainer.epoch, opt.nepoch):
     trainer.train_epoch()
     with torch.no_grad():

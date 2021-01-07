@@ -12,6 +12,7 @@ from model.trainer_model import TrainerModel
 from dataset.trainer_dataset import TrainerDataset
 from training.trainer_loss import TrainerLoss
 
+import dataset.pointcloud_processor as pointcloud_processor
 
 class Trainer(TrainerAbstract, TrainerLoss, TrainerIteration, TrainerDataset, TrainerModel):
     def __init__(self, opt):
@@ -110,6 +111,48 @@ class Trainer(TrainerAbstract, TrainerLoss, TrainerIteration, TrainerDataset, Tr
                                                 log_curves}
             self.html_report_data.fscore_curve = {"fscore": self.log.curves["fscore"]}
             html_report.main(self, outHtml="index.html")
+
+    def test_generation_epoch(self):
+        self.flags.train = False
+        self.network.eval()
+
+        root = 'reconstructed'
+        if not os.path.exists(root):
+            os.mkdir(root)
+
+        iterator = self.datasets.dataloader_test.__iter__()
+        self.reset_iteration()
+        for data in iterator:
+            self.increment_iteration()
+            self.data = EasyDict(data)
+            self.make_network_input()
+            mesh = self.network.module.generate_mesh(self.data.network_input)
+
+            category_id = self.data.category
+            model_id = self.data.name
+
+            points = self.data.points
+            # transfer back to model size
+            operation = pointcloud_processor.Normalization(points, keep_track=True)
+            if self.opt.normalization == "UnitBall":
+                operation.normalize_unitL2ball()
+            elif self.opt.normalization == "BoundingBox":
+                operation.normalize_bounding_box()
+            else:
+                pass
+
+            # Undo any normalization that was used to preprocess the input.
+            vertices = torch.from_numpy(mesh.vertices).clone().unsqueeze(0)
+            operation.invert()
+            unnormalized_vertices = operation.apply(vertices)
+            mesh = pymesh.form_mesh(vertices=unnormalized_vertices.squeeze().numpy(), faces=mesh.faces)
+
+            # output (in model size)
+            output_cls_dir = os.path.join(root, category_id)
+            if not os.path.exists(output_cls_dir):
+                os.mkdir(output_cls_dir)
+            output_model_file = os.path.join(output_cls_dir, '%s.ply' % model_id)
+            mesh_processor.save(mesh, output_model_file, self.colormap)
 
     def generate_random_mesh(self):
         """ Generate a mesh from a random test sample """
